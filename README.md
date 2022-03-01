@@ -42,7 +42,7 @@ Remarks:
 
 ## Setup
 
-### Prerequisite
+### Prerequisites
 
 1. Open Bash on your local machine e.g., by using [Windows Subsystem for Linux](https://docs.microsoft.com/en-us/windows/wsl/).
 
