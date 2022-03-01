@@ -1,0 +1,28 @@
+POST http://localhost:5002/User HTTP/1.1
+content-type: application/json
+
+{
+  "id": "8df29090-d719-4521-98e2-cebc7b0deb16",
+  "firstName": "John",
+  "lastName": "Doe",
+  "emailAddress": "john.doe@outlook.com",
+  "tenantId": "f9a358dd-dc88-4466-b42e-6c3b368f1877"
+}
+
+###
+GET http://localhost:5002/User/8df29090-d719-4521-98e2-cebc7b0deb16 HTTP/1.1
+
+###
+PUT http://localhost:5002/User/8df29090-d719-4521-98e2-cebc7b0deb16 HTTP/1.1
+content-type: application/json
+
+{
+  "id": "8df29090-d719-4521-98e2-cebc7b0deb16",
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "emailAddress": "jane.doe@outlook.com",
+  "tenantId": "f9a358dd-dc88-4466-b42e-6c3b368f1877"
+}
+
+###
+DELETE http://localhost:5002/User/8df29090-d719-4521-98e2-cebc7b0deb16 HTTP/1.1

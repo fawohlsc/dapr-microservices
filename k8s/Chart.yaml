@@ -1,0 +1,5 @@
+apiVersion: v2
+name: dapr-microservices
+description: Helm chart to deploy dapr-microservices.
+type: application
+version: 1.0.0

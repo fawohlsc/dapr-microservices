@@ -1,0 +1,154 @@
+version: '3.4'
+
+services:
+  # Seq for logs (http://localhost:5341/).
+  seq:
+    image: "datalust/seq"
+    container_name: "seq"
+    environment:
+      - ACCEPT_EULA=Y
+    ports:
+      - "5341:80"
+    networks:
+      - dapr-microservices
+
+  # Zipkin for observability (http://localhost:9412).
+  zipkin:
+    image: "openzipkin/zipkin-slim"
+    container_name: "zipkin"
+    ports:
+      - "9412:9411"
+    networks:
+      - dapr-microservices
+
+  # MongoDB as state store.
+  mongo:
+    image: "mongo"
+    container_name: "mongo"
+    ports:
+      - "27017:27017"
+    networks:
+      - dapr-microservices
+
+  # Redis as pub/sub broker.
+  redis:
+    image: "redis"
+    container_name: "redis"
+    command: redis-server
+    ports:
+      - "6380:6379"
+    networks:
+      - dapr-microservices
+
+  # Dapr placement service.
+  placement-dapr:
+    image: "daprio/dapr"
+    container_name: "placement-dapr"
+    command: [ "./placement", "-port", "50000" ]
+    ports:
+      - "50000:50000"
+    networks:
+      - dapr-microservices
+
+  # TenantService + Dapr sidecar.
+  tenantservice:
+    image: tenantservice
+    container_name: "tenantservice"
+    build:
+      context: .
+      dockerfile: TenantService/Dockerfile
+    depends_on:
+      - seq
+      - zipkin
+      - mongo
+      - redis
+      - placement-dapr
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    networks:
+      - dapr-microservices
+    ports:
+      - 5001:5000 # App port mapping.
+      - 50001:50001 # Dapr gRPC port mapping.
+    volumes:
+      - ~/.vsdbg:/remote_debugger:rw
+
+  tenantservice-dapr:
+    image: "daprio/daprd:edge"
+    container_name: "tenantservice-dapr"
+    command:
+      [
+        "./daprd",
+        "-app-id",
+        "tenantservice",
+        "-app-port",
+        "5000",
+        "-placement-host-address",
+        "placement:50000",
+        "-components-path",
+        "/components",
+        "-components-path",
+        "/components",
+        "-config",
+        "/configuration/config.yaml",
+        "-log-level",
+        "info"
+      ]
+    volumes:
+      - "../local/components/:/components"
+      - "../local/configuration/:/configuration"
+    depends_on:
+      - tenantservice
+    network_mode: "service:tenantservice"
+
+  # UserService + Dapr sidecar.
+  userservice:
+    image: userservice
+    container_name: "userservice"
+    build:
+      context: .
+      dockerfile: UserService/Dockerfile
+    depends_on:
+      - seq
+      - zipkin
+      - mongo
+      - redis
+      - placement-dapr
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    networks:
+      - dapr-microservices
+    ports:
+      - 5002:5000 # App port mapping.
+      - 50002:50001 # Dapr gRPC port mapping.
+    volumes:
+      - ~/.vsdbg:/remote_debugger:rw
+
+  userservice-dapr:
+    image: "daprio/daprd:edge"
+    container_name: "userservice-dapr"
+    command:
+      [
+        "./daprd",
+        "-app-id",
+        "userservice",
+        "-app-port",
+        "5000",
+        "-placement-host-address",
+        "placement:50000",
+        "-components-path",
+        "/components",
+        "-config",
+        "/configuration/config.yaml",
+        "-log-level",
+        "info"
+      ]
+    volumes:
+      - "../local/components/:/components"
+      - "../local/configuration/:/configuration"
+    depends_on:
+      - userservice
+    network_mode: "service:userservice"
+
+networks:
+  dapr-microservices:

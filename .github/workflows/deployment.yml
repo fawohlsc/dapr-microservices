@@ -1,0 +1,118 @@
+name: deployment
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/**"
+      - "azure/**"
+      - "k8s/**"
+      - "src/**"
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      AZURE_RESOURCE_GROUP_NAME: "dapr-microservices"
+      AZURE_LOCATION: "westeurope"
+      KUBERNETES_NAMESPACE: "dapr-microservices"
+    steps:
+      - name: Checkout repository
+        id: checkoutRepository
+        uses: actions/checkout@v2
+      - name: Login to Azure
+        id: login_to_azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Create resource group
+        id: createResourceGroup
+        uses: azure/CLI@v1
+        with:
+          azcliversion: 2.33.0
+          inlineScript: |
+            az group create -n $AZURE_RESOURCE_GROUP_NAME -l $AZURE_LOCATION > /dev/null
+      - name: Deploy to Azure
+        id: deployAzure
+        uses: azure/arm-deploy@v1
+        with:
+          resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP_NAME }}
+          deploymentMode: Complete
+          template: ./azure/main.bicep
+          failOnStdErr: true
+      - name: Fix HTTP Application Routing
+        id: fixHttpApplicationRouting
+        uses: azure/CLI@v1
+        env:
+          AKS_NAME: ${{ steps.deployAzure.outputs.aksName }}
+        with:
+          azcliversion: 2.33.0
+          inlineScript: |
+            # Workaround: Reassign the managed identity for HTTP Application Routing.
+            # See: https://azure.github.io/application-gateway-kubernetes-ingress/troubleshootings/troubleshooting-agic-addon-identity-not-found/
+            aks_http_app_routing_identity_id=$(az aks show --n $AKS_NAME -g $AZURE_RESOURCE_GROUP_NAME --query "addonProfiles.httpApplicationRouting.identity.resourceId" -o tsv)
+            aks_vmss_resource_group_id=$(az aks show -n $AKS_NAME -g $AZURE_RESOURCE_GROUP_NAME --query "nodeResourceGroup" -o tsv)
+            read aks_vmss_id aks_vmss_name <<< $(az vmss list -g $aks_vmss_resource_group_id --query "[].[id,name]" -o tsv)
+            az vmss identity remove --ids $aks_vmss_id --identities $aks_http_app_routing_identity_id > /dev/null
+            az vmss identity assign --ids $aks_vmss_id --identities $aks_http_app_routing_identity_id > /dev/null
+            az vmss update-instances -n $aks_vmss_name -g $aks_vmss_resource_group_id --instance-ids "*" > /dev/null
+      - name: Build and push containers
+        id: buildPushContainers
+        uses: azure/CLI@v1
+        env:
+          ACR_NAME: ${{ steps.deployAzure.outputs.acrName }}
+          TENANT_SERVICE_CONTAINER_IMAGE: ${{ steps.deployAzure.outputs.acrLoginServer }}/tenantservice:${{ github.run_number }}
+          USER_SERVICE_CONTAINER_IMAGE: ${{ steps.deployAzure.outputs.acrLoginServer }}/userservice:${{ github.run_number }}
+        with:
+          azcliversion: 2.33.0
+          inlineScript: |
+            # TenantService
+            az acr build \
+              --image $TENANT_SERVICE_CONTAINER_IMAGE \
+              --registry $ACR_NAME \
+              --file "./src/TenantService/Dockerfile" \
+              "./src"
+
+            # UserService
+            az acr build \
+              --image $USER_SERVICE_CONTAINER_IMAGE \
+              --registry $ACR_NAME \
+              --file "./src/UserService/Dockerfile" \
+              "./src"
+      - name: Login to Kubernetes
+        id: loginKubernetes
+        uses: azure/aks-set-context@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          cluster-name: ${{ steps.deployAzure.outputs.aksName }}
+          resource-group: ${{ env.AZURE_RESOURCE_GROUP_NAME }}
+      - name: Install Helm
+        id: installHelm
+        uses: Azure/setup-helm@v1
+        with:
+          version: v3.8.0
+      - name: Deploy to Kubernetes
+        id: deployKubernetes
+        env:
+          AKS_NAME: ${{ steps.deployAzure.outputs.aksName }}
+          AKS_HTTP_APP_ROUTING_ZONE_NAME: ${{ steps.deployAzure.outputs.aksHttpAppRoutingZoneName }}
+          KV_NAME: ${{ steps.deployAzure.outputs.kvName }}
+          ST_ACC_NAME: ${{ steps.deployAzure.outputs.stAccName }}
+          TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          TENANT_SERVICE_CONTAINER_IMAGE: ${{ steps.deployAzure.outputs.acrLoginServer }}/tenantservice:${{ github.run_number }}
+          USER_SERVICE_CONTAINER_IMAGE: ${{ steps.deployAzure.outputs.acrLoginServer }}/userservice:${{ github.run_number }}
+        run: |
+          aks_identity_client_id=$(az aks show -n $AKS_NAME -g $AZURE_RESOURCE_GROUP_NAME --query "identityProfile.kubeletidentity.clientId" -o tsv)
+
+          helm upgrade \
+            --install \
+            --set aksIdentityClientId=$aks_identity_client_id \
+            --set aksHttpAppRoutingZoneName=$AKS_HTTP_APP_ROUTING_ZONE_NAME \
+            --set kvName=$KV_NAME \
+            --set namespace=$KUBERNETES_NAMESPACE \
+            --set stAccName=$ST_ACC_NAME \
+            --set tenantId=$TENANT_ID \
+            --set tenantServiceContainerImage=$TENANT_SERVICE_CONTAINER_IMAGE \
+            --set userServiceContainerImage=$USER_SERVICE_CONTAINER_IMAGE \
+            "dapr-microservices" \
+            "./k8s/"

@@ -1,0 +1,24 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: statestore
+  namespace: {{ .Values.namespace }}
+spec:
+  type: state.azure.tablestorage
+  version: v1
+  metadata:
+    - name: accountName
+      value: {{ .Values.stAccName }}
+    - name: accountKey
+      secretKeyRef:
+        name: StAccKey
+        key: StAccKey
+    - name: tableName
+      value: daprStore
+    - name: actorStateStore
+      value: "true"
+auth:
+  secretStore: secretstore
+scopes:
+  - tenantservice
+  - userservice

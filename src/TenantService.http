@@ -1,0 +1,24 @@
+POST http://localhost:5001/Tenant HTTP/1.1
+content-type: application/json
+
+{
+  "id": "f9a358dd-dc88-4466-b42e-6c3b368f1877",
+  "name": "tenant01",
+  "sku": "free"
+}
+
+###
+GET http://localhost:5001/Tenant/f9a358dd-dc88-4466-b42e-6c3b368f1877 HTTP/1.1
+
+###
+PUT http://localhost:5001/Tenant/f9a358dd-dc88-4466-b42e-6c3b368f1877 HTTP/1.1
+content-type: application/json
+
+{
+  "id": "f9a358dd-dc88-4466-b42e-6c3b368f1877",
+  "name": "tenant01",
+  "sku": "premium"
+}
+
+###
+DELETE http://localhost:5001/Tenant/f9a358dd-dc88-4466-b42e-6c3b368f1877 HTTP/1.1

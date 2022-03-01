@@ -1,0 +1,23 @@
+# The managed identity used by Kubernetes must be set during helm upgrade e.g., fb34868a-ad5f-4aca-9e1a-5f6ba8c4940b.
+aksIdentityClientId:
+
+# The DNS zone used for HTTP Application Routing must be set during helm upgrade e.g., 589fa522340a4c1a92ca.westeurope.aksapp.io.
+aksHttpAppRoutingZoneName:
+
+# The keyvault must be set during helm upgrade e.g., kv53iikz4x5n623.
+kvName:
+
+# The Kubernetes namespace can be overwritten during helm upgrade, e.g. dapr-microservices.
+namespace:
+
+# The storage account must be set during helm upgrade e.g., st53iikz4x5n623.
+stAccName:
+
+# The tenant must be set during helm upgrade e.g., 8f6b8c77-ccb7-44fb-b22f-d1c343f776db.
+tenantId:
+
+# The container image of the tenant service must be set during helm upgrade e.g., acr53iikz4x5n623.azurecr.io/tenantservice:latest.
+tenantServiceContainerImage:
+
+# The container image of the tenant service must be set during helm upgrade e.g., acr53iikz4x5n623.azurecr.io/userservice:latest.
+userServiceContainerImage:
